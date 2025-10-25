@@ -1,0 +1,1 @@
+<a href="{{ action([\Modules\Clinic\Http\Controllers\PatientPaymentController::class, 'show'], [$id])}}" class="view_payment_modal payment-status-label text-dark" data-orig-value="{{$payment_status}}" data-status-name="{{$payment_status}}"><span class="label @payment_status($payment_status)">{{$payment_status}}</span></a>

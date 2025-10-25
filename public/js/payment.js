@@ -1,0 +1,278 @@
+var rowIndex = 0;
+$(document).ready(function () {
+    $(document).on('click', '.add_payment_modal', function (e) {
+        e.preventDefault();
+        var container = $('.payment_modal');
+
+        const isDirectSale = $(this).data('is_direct_sale'); // Get the is_direct_sale value
+        const register = $('#register_report').data('register'); // Get the register value
+
+        if (isDirectSale == 0 && !register) {
+            swal({
+                title: "No Bill payment can be processed as the register is closed.",
+                icon: "warning",
+                dangerMode: true,
+            });
+            return false;
+        }
+
+        $.ajax({
+            url: $(this).attr('href'),
+            dataType: 'json',
+            success: function (result) {
+                if (result.status == 'due') {
+                    container.html(result.view).modal('show');
+                    __currency_convert_recursively(container);
+                    $('#paid_on').datetimepicker({
+                        format: moment_date_format + ' ' + moment_time_format,
+                        ignoreReadonly: true,
+                    });
+                    container.find('form#transaction_payment_add_form').validate();
+                    set_default_payment_account();
+
+                    $('.payment_modal')
+                        .find('input[type="checkbox"].input-icheck')
+                        .each(function () {
+                            $(this).iCheck({
+                                checkboxClass: 'icheckbox_square-blue',
+                                radioClass: 'iradio_square-blue',
+                            });
+                        });
+                } else {
+                    toastr.error(result.msg);
+                }
+            },
+        });
+    });
+    $(document).on('click', '.edit_payment', function (e) {
+        e.preventDefault();
+        var container = $('.edit_payment_modal');
+
+        $.ajax({
+            url: $(this).data('href'),
+            dataType: 'html',
+            success: function (result) {
+                container.html(result).modal('show');
+                __currency_convert_recursively(container);
+                $('#paid_on').datetimepicker({
+                    format: moment_date_format + ' ' + moment_time_format,
+                    ignoreReadonly: true,
+                });
+                container.find('form#transaction_payment_add_form').validate();
+            },
+        });
+    });
+
+    $(document).on('click', '.view_payment_modal', function (e) {
+        e.preventDefault();
+        var container = $('.payment_modal');
+        var row = $(this).closest('tr'); 
+        rowIndex = row.index(); 
+        console.log("Row index: ", rowIndex);
+
+        $.ajax({
+            url: $(this).attr('href'),
+            dataType: 'html',
+            success: function (result) {
+                $(container).html(result).modal('show');
+                __currency_convert_recursively(container);
+            },
+        });
+    });
+    $(document).on('click', '.delete_payment', function (e) {
+        swal({
+            title: LANG.sure,
+            text: LANG.confirm_delete_payment,
+            icon: 'warning',
+            buttons: true,
+            dangerMode: true,
+        }).then((willDelete) => {
+            if (willDelete) {
+                $.ajax({
+                    url: $(this).data('href'),
+                    method: 'delete',
+                    dataType: 'json',
+                    success: function (result) {
+                        if (result.success === true) {
+                            $('div.payment_modal').modal('hide');
+                            $('div.edit_payment_modal').modal('hide');
+                            toastr.success(result.msg);
+                            if (typeof purchase_table != 'undefined') {
+                                purchase_table.ajax.reload();
+                            }
+                            if (typeof sell_table != 'undefined') {
+                                sell_table.ajax.reload();
+                            }
+                            if (typeof expense_table != 'undefined') {
+                                expense_table.ajax.reload();
+                            }
+                            if (typeof ob_payment_table != 'undefined') {
+                                ob_payment_table.ajax.reload();
+                            }
+                            if (typeof clinic_sell_table != 'undefined') {
+                                clinic_sell_table.ajax.reload();
+                            }
+                            // project Module
+                            if (typeof project_invoice_datatable != 'undefined') {
+                                project_invoice_datatable.ajax.reload();
+                            }
+
+                            if ($('#contact_payments_table').length) {
+                                get_contact_payments();
+                            }
+                        } else {
+                            toastr.error(result.msg);
+                        }
+                    },
+                });
+            }
+        });
+    });
+
+    //view single payment
+    $(document).on('click', '.view_payment', function () {
+        var url = $(this).data('href');
+        var container = $('.view_modal');
+        $.ajax({
+            method: 'GET',
+            url: url,
+            dataType: 'html',
+            success: function (result) {
+                $(container).html(result).modal('show');
+                __currency_convert_recursively(container);
+            },
+        });
+    });
+});
+
+$(document).on('change', '#transaction_payment_add_form .payment_types_dropdown', function (e) {
+    set_default_payment_account();
+});
+
+function set_default_payment_account() {
+    var default_accounts = {};
+
+    if (!_.isUndefined($('#transaction_payment_add_form #default_payment_accounts').val())) {
+        default_accounts = JSON.parse(
+            $('#transaction_payment_add_form #default_payment_accounts').val()
+        );
+    }
+
+    var payment_type = $('#transaction_payment_add_form .payment_types_dropdown').val();
+    if (payment_type && payment_type != 'advance') {
+        var default_account =
+            !_.isEmpty(default_accounts) && default_accounts[payment_type]['account']
+                ? default_accounts[payment_type]['account']
+                : '';
+        $('#transaction_payment_add_form #account_id').val(default_account);
+        $('#transaction_payment_add_form #account_id').change();
+    }
+}
+
+$(document).on('change', '.payment_types_dropdown', function (e) {
+    var payment_type = $('#transaction_payment_add_form .payment_types_dropdown').val();
+    account_dropdown = $('#transaction_payment_add_form #account_id');
+    if (payment_type == 'advance') {
+        if (account_dropdown) {
+            account_dropdown.prop('disabled', true);
+            account_dropdown.closest('.form-group').addClass('hide');
+        }
+    } else {
+        if (account_dropdown) {
+            account_dropdown.prop('disabled', false);
+            account_dropdown.closest('.form-group').removeClass('hide');
+        }
+    }
+});
+
+$(document).on('submit', 'form#transaction_payment_add_form', function (e) {
+    e.preventDefault(); // Prevent the default form submission
+
+    const transaction_type = $('#transaction_type').val();
+    const payment_type = $('#transaction_payment_add_form .payment_types_dropdown').val();
+    const form = $(this);
+    const form_data = form.serialize();
+    let is_valid = true;
+
+    if (transaction_type === 'sell_return' || transaction_type === 'sell') {
+        $.ajax({
+            method: 'POST',
+            url: form.attr('action'),
+            data: form_data,
+            dataType: 'json',
+            success: function (result) {
+                if (result.success == 1) {
+                    if (transaction_type === 'sell_return') {
+                        pos_print(result.receipt);
+                    } else if (transaction_type === 'sell') {
+                        $('div.payment_modal').modal('hide');
+                        // Replace the placeholder with the actual transaction_id
+                        let transactionId = result.transaction_id;
+                        let printInvoiceBaseUrl = base_path + '/sells/' + transactionId + '/print';
+                        printInvoiceBaseUrl = printInvoiceBaseUrl.replace(':id', transactionId);
+                        let printInvoice = $('.print-invoice').attr('href', printInvoiceBaseUrl).hide();
+                        printInvoice[rowIndex].click();
+                        printInvoice.remove();
+                        
+                    }
+                } else {
+                    toastr.error(result.msg);
+                }
+            },
+            error: function (xhr, status, error) {
+                toastr.error('An error occurred while processing your request.');
+            },
+        });
+    } else {
+        const denomination_for_payment_types = JSON.parse($('#transaction_payment_add_form .enable_cash_denomination_for_payment_methods').val());
+        if (denomination_for_payment_types.includes(payment_type) && $('#transaction_payment_add_form .is_strict').length && $('#transaction_payment_add_form .is_strict').val() === '1') {
+            const payment_amount = __read_number($('#transaction_payment_add_form .payment_amount'));
+            const total_denomination = $('#transaction_payment_add_form').find('input.denomination_total_amount').val();
+            if (payment_amount != total_denomination) {
+                is_valid = false;
+            }
+        }
+
+        if (!is_valid) {
+            $('#transaction_payment_add_form').find('.cash_denomination_error').removeClass('hide');
+            return false;
+        } else {
+            $('#transaction_payment_add_form').find('.cash_denomination_error').addClass('hide');
+        }
+    }
+});
+function pos_print(receipt) {
+    // If printer type then connect with websocket
+    if (receipt.print_type == 'printer') {
+        var content = receipt;
+        content.type = 'print-receipt';
+
+        // Check if ready or not, then print.
+        if (socket.readyState != 1) {
+            initializeSocket();
+            setTimeout(function () {
+                socket.send(JSON.stringify(content));
+            }, 700);
+        } else {
+            socket.send(JSON.stringify(content));
+        }
+    } else if (receipt.html_content != '') {
+        var title = document.title;
+        if (typeof receipt.print_title != 'undefined') {
+            document.title = receipt.print_title;
+        }
+
+        // If printer type browser then print content
+        $('#receipt_section').html(receipt.html_content);
+        __currency_convert_recursively($('#receipt_section'));
+        var url = base_path + '/bill-return';
+        setTimeout(function () {
+            window.print();
+            document.title = title;
+            // Redirect after printing
+            setTimeout(function () {
+                window.location.href = url;
+            }, 500);
+        }, 1000);
+    }
+}

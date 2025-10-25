@@ -1,0 +1,11 @@
+{
+    "name": "Clinic",
+    "alias": "clinic",
+    "description": "This is our new Clinic Module Processing...........",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Clinic\\Providers\\ClinicServiceProvider"
+    ],
+    "files": []
+}

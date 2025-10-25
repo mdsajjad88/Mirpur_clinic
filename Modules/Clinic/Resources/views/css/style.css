@@ -1,0 +1,76 @@
+.patient-heading {
+    background: #D7D7FB;
+    margin: 2px;
+    padding: 10px;
+}
+
+.fa-user-tie {
+    font-size: 100px;
+}
+
+.patient_details {
+    margin: 3px;
+}
+
+.subscribe,
+.deactive {
+    background: #FA2364;
+    color: white;
+}
+
+.appointment,
+.f-password {
+    background: #626EE2;
+    color: white;
+}
+
+.nav-tabs .nav-link {
+    font-size: 16px;
+    /* Adjust this value as needed */
+}
+
+.dateTime {
+    min-width: 88px;
+}
+.custom-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px; /* Adjust width for a smaller switch */
+    height: 20px; /* Adjust height for a smaller switch */
+}
+
+.custom-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.custom-switch .custom-control-label {
+    position: absolute;
+    cursor: pointer;
+    background-color: #ccc;
+    border-radius: 20px; /* Adjust radius for a smaller switch */
+    transition: background-color 0.3s;
+    width: 40px; /* Match width */
+    height: 20px; /* Match height */
+}
+
+.custom-switch .custom-control-label:before {
+    content: "";
+    position: absolute;
+    top: 2px; /* Adjust for vertical centering */
+    left: 2px; /* Adjust for horizontal centering */
+    width: 16px; /* Adjust handle size */
+    height: 16px; /* Adjust handle size */
+    border-radius: 50%;
+    background-color: white;
+    transition: transform 0.3s;
+}
+
+.custom-switch input:checked + .custom-control-label {
+    background-color: #007bff;
+}
+
+.custom-switch input:checked + .custom-control-label:before {
+    transform: translateX(20px); /* Adjust for smaller size */
+}

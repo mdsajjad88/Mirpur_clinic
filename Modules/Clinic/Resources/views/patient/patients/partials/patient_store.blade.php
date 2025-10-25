@@ -1,0 +1,1 @@
+<p>Patient Store Lorem ipsum dolor, sit amet consectetur adipisicing elit. Velit, saepe.</p>

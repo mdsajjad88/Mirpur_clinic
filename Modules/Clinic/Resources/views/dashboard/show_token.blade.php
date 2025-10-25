@@ -1,0 +1,1 @@
+<h1>Wellcome <br> Dear, <br>  {{Auth::user()->first_name}} {{Auth::user()->last_name}}</h1>

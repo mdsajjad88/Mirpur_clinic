@@ -1,0 +1,296 @@
+    let productEntryCount = 0; // Track the number of products entered
+    let previousStatus = $('#status').val(); // Store the previous status for comparison
+    
+    // Listen to the status change event
+    $('#status').on('change', function () {
+        var newStatus = $(this).val();
+        
+        // If changing from "demand" to any other status and there are products entered
+        if (previousStatus === 'demand' && newStatus !== 'demand' && productEntryCount > 0) {
+            // Show SweetAlert confirmation
+            swal({
+                title: LANG.sure,
+                text: "Changing the status will clear all the entered products. Are you sure?",
+                icon: 'warning',
+                buttons: true,
+                dangerMode: true,
+            }).then(willClear => {
+                if (willClear) {
+                    // Clear product entries
+                    clearProductEntries();
+                    previousStatus = newStatus;  // Update the previous status after clearing products
+                } else {
+                    // Reset status back to 'demand' if the user cancels
+                    $('#status').val(previousStatus).trigger('change');
+                }
+            });
+        } else {
+            // If no products are entered or not switching from 'demand', just update the status
+            previousStatus = newStatus;
+        }
+    });
+    
+    // Helper function to clear the existing product entries
+    function clearProductEntries() {
+        // Clear all rows from the product table
+        $('#pos_table tbody').empty();
+        productEntryCount = 0;  // Reset the product entry count
+        pos_total_row();  // Update totals after clearing
+    }
+    
+    // Example: AutoComplete code (similar to the one you already have)
+    if ($('#search_product').length) {
+        $('#search_product').autocomplete({
+            delay: 1000,
+            source: function (request, response) {
+                var price_group = '';
+                var search_fields = [];
+                $('.search_fields:checked').each(function (i) {
+                    search_fields[i] = $(this).val();
+                });
+    
+                if ($('#price_group').length > 0) {
+                    price_group = $('#price_group').val();
+                }
+    
+                $.getJSON(
+                    '/products/list',
+                    {
+                        price_group: price_group,
+                        term: request.term,
+                        not_for_selling: 0,
+                        search_fields: search_fields,
+                    },
+                    response
+                );
+            },
+            minLength: 2,
+            response: function (event, ui) {
+                var status = $('#status').val();
+                var is_demand_status = status === 'demand';
+    
+                if (ui.content.length == 1) {
+                    ui.item = ui.content[0];
+    
+                    if (is_demand_status && ui.item.qty_available > 0) {
+                        ui.item = null; // If status is 'demand', disable current stock products
+                    }
+    
+                    if (ui.item) {
+                        $(this)
+                            .data('ui-autocomplete')
+                            ._trigger('select', 'autocompleteselect', ui);
+                        $(this).autocomplete('close');
+                    } else {
+                        toastr.error(LANG.no_products_found);
+                        $('input#search_product').select();
+                    }
+                }
+            },
+            select: function (event, ui) {
+                var searched_term = $(this).val();
+                var status = $('#status').val();
+                var is_demand_status = status === 'demand';
+    
+                if (is_demand_status && productEntryCount > 0) {
+                    // Show SweetAlert for confirmation to clear existing products
+                    swal({
+                        title: 'Clear existing products?',
+                        text: "There is already a product entered. Do you want to clear it?",
+                        icon: 'warning',
+                        buttons: true,
+                        dangerMode: true,
+                    }).then(willDelete => {
+                        if (willDelete) {
+                            // Clear existing products and allow new entry
+                            clearProductEntries();
+                            addProduct(ui);  // Add the new product
+                        } else {
+                            $(this).val(null);  // Reset the input field
+                        }
+                    });
+                }
+                else if(status === '' || status === null){
+                    swal({
+                        title: "Status not selected!",
+                        text: "Please select a status before adding products.",
+                        icon: 'warning',
+                    });
+                    return false;
+                }
+                else {
+                    addProduct(ui);  // No existing product, add the product directly
+                }
+            }
+        }).autocomplete('instance')._renderItem = function (ul, item) {
+            var status = $('#status').val();
+            var is_demand_status = status === 'demand';
+    
+            if (is_demand_status && item.qty_available > 0) {
+                // Render out-of-stock items differently if status is 'demand'
+                var string = '<li class="ui-state-disabled"><span>' + item.name;
+                var qty_available = __currency_trans_from_en(item.qty_available, false, false, __currency_precision, true);
+                if (item.type == 'variable') {
+                    string += '-' + item.variation;
+                }
+                var selling_price = parseFloat(item.selling_price).toFixed(2);
+                if (item.variation_group_price) {
+                    selling_price = parseFloat(item.variation_group_price).toFixed(2);
+                }
+                if (is_demand_status) {
+                    string += ' (' + item.sub_sku + ')' + '<br> &nbsp; ৳' + selling_price + ' - Current Stock: ' + qty_available + item.unit + '</span></li><hr/>';
+                } else {
+                    string += ' (' + item.sub_sku + ')' + '<br> &nbsp; ৳' + selling_price + ' (Out of stock)</span></li><hr/>';
+                }
+                return $(string).appendTo(ul);
+            } else {
+                // Render items as per the original logic
+                var string = '<div>' + item.name;
+    
+                if (item.type == 'variable') {
+                    string += '-' + item.variation;
+                }
+    
+                var selling_price = parseFloat(item.selling_price).toFixed(2);
+                if (item.variation_group_price) {
+                    selling_price = parseFloat(item.variation_group_price).toFixed(2);
+                }
+                var brandName = item.brand_id ? item.brand.name : 'No brand';
+    
+                string += ' (' + item.sub_sku + ')' + ' | Brand: ' + brandName + '<br> ৳' + selling_price;
+    
+                if (item.enable_stock == 1) {
+                    var qty_available = __currency_trans_from_en(item.qty_available, false, false, __currency_precision, true);
+                    if (item.total_quantity <= 0) {
+                        string += ' (Out of stock)';
+                    } else {
+                        string += ' - Current Stock: ' + qty_available + item.unit;
+                    }
+                }
+                return $('<li>').append(string).appendTo(ul);
+            }
+        };
+    }
+    
+    // Helper function to add a product
+    function addProduct(ui) {
+        var searched_term = $('#search_product').val();
+        var purchase_line_id = ui.item.purchase_line_id && searched_term == ui.item.lot_number
+            ? ui.item.purchase_line_id
+            : null;
+        pos_product_row(ui.item.variation_id, purchase_line_id);
+        productEntryCount++;  // Increment the product entry count
+    }
+    
+
+    // Helper function to clear the existing product entries
+    function clearProductEntries() {
+        // Add logic here to clear existing product rows
+        $('#pos_table tbody').empty();  // Clear the product table rows
+        productEntryCount = 0;  // Reset the product entry count
+        pos_total_row();  // Update the totals after clearing
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    }).autocomplete('instance')._renderItem = function (ul, item) {
+            var status = $('#status').val();
+            var is_demand_status = status === 'demand';
+    
+            if (is_demand_status && item.qty_available > 0) {
+                // Render out-of-stock items differently if status is 'demand'
+                var string = '<li class="ui-state-disabled"><span>' + item.name;
+                var qty_available = __currency_trans_from_en(item.qty_available, false, false, __currency_precision, true);
+                if (item.type == 'variable') {
+                    string += '-' + item.variation;
+                }
+                var selling_price = parseFloat(item.selling_price).toFixed(2);
+                if (item.variation_group_price) {
+                    selling_price = parseFloat(item.variation_group_price).toFixed(2);
+                }
+                if (is_demand_status){
+                    string += ' (' + item.sub_sku + ')' + '<br> &nbsp; ৳' + selling_price + ' - Current Stock: ' + qty_available + item.unit + '</span></li><hr/>';
+                }
+                else {
+                    string += ' (' + item.sub_sku + ')' + '<br> &nbsp; ৳' + selling_price + ' (Out of stock)</span></li><hr/>';
+                }
+                // if (item.total_quantity > 0) {
+                //     string += '</span></li><b> Store:' + parseFloat(item.total_quantity - item.qty_available).toFixed(2) + '</b><hr/>';
+                // } 
+                // else {
+                //     string += '| Store:' + parseFloat(item.total_quantity - item.qty_available).toFixed(2) + '</span></li><hr/>';
+                // }
+                return $(string).appendTo(ul);
+            } else {
+                // Render items as per the original logic
+                var location_id = $('input#location_id').val();
+                var string = '<div>' + item.name;
+    
+                if (item.type == 'variable') {
+                    string += '-' + item.variation;
+                }
+    
+                var selling_price = parseFloat(item.selling_price).toFixed(2);
+                if (item.variation_group_price) {
+                    selling_price = parseFloat(item.variation_group_price).toFixed(2);
+                }
+                var brandName = item.brand_id ? item.brand.name : 'No brand';
+    
+                string += ' (' + item.sub_sku + ')' + ' | Brand: ' + brandName + '<br> ৳' + selling_price;
+    
+                if (item.enable_stock == 1) {
+                    var qty_available = __currency_trans_from_en(item.qty_available, false, false, __currency_precision, true);
+                    if (item.total_quantity <= 0) {
+                        string += ' (Out of stock)';
+                    } else {
+                        string += ' - Current Stock: ' + qty_available + item.unit;
+                    }
+                    
+                }
+    
+                // Determine the color based on the expiration date
+                if (item.nearest_exp_date) {
+                    var exp_date = new Date(item.nearest_exp_date);
+                    var today = new Date();
+                    var days_to_expiry = (exp_date - today) / (1000 * 60 * 60 * 24);
+                    var expiringSoon = $('#expiring_soon').val();
+                    var expiringLater = $('#expiring_later').val();
+    
+                    if (days_to_expiry <= parseInt(expiringSoon) && item.total_quantity > 0) {
+                        if (item.total_quantity <= 0 && !is_demand_status) {
+                            string = '<div class="ui-state-disabled" style="border-left: 5px solid red;">' + string; 
+                        } else {
+                            string = '<div style="border-left: 5px solid red;">' + string;      
+                        }
+                    } else if (days_to_expiry <= parseInt(expiringLater) && item.total_quantity > 0) {
+                        if (item.total_quantity <= 0 && !is_demand_status) {
+                            string = '<div class="ui-state-disabled" style="border-left: 5px solid orange;">' + string;     
+                        } else {
+                            string = '<div style="border-left: 5px solid orange;">' + string;     
+                        }
+                    } else {
+                        if (item.total_quantity <= 0 && !is_demand_status) {
+                        string = '<div class="ui-state-disabled">' + string;
+                        }
+                    }
+                } else {
+                    if (item.total_quantity <= 0 && !is_demand_status) {
+                    string = '<div class="ui-state-disabled">' + string;
+                    }
+                }
+    
+                return $('<li>').append(string).appendTo(ul);
+            }
+        };
